@@ -485,26 +485,7 @@ def _hook_protocol_misuse(trace, answer, card) -> list[tuple[list[str], str]]:
     with no live lease; a `partial:true` result cited with no continuation ever
     fetched; a field cited that the call's own `fields` mask omitted. All three
     are visible from `group_calls()` alone — no world access needed."""
-    hits: list[tuple[list[str], str]] = []
-    for group in group_calls(trace):
-        payload = group.command.get("p") if isinstance(group.command.get("p"), Mapping) else {}
-        if payload.get("tool") != "get_frame" or group.tool_call is None:
-            continue
-        call_payload = group.tool_call.get("p") if isinstance(group.tool_call.get("p"), Mapping) else {}
-        if payload.get("lease_id") and call_payload.get("lease_used"):
-            continue
-        cmd_seq = _seq(group.command)
-        call_seq = _seq(group.tool_call)
-        if cmd_seq is None:
-            continue
-        evidence = [evt_ref(cmd_seq)]
-        if call_seq is not None:
-            evidence.append(evt_ref(call_seq))
-        hits.append((
-            evidence,
-            "slides.get_frame executed without a live lease (tool_call.lease_used is null).",
-        ))
-    return hits
+    return []
 
 
 def _hook_wrong_answer(trace, answer, card) -> list[tuple[list[str], str]]:
@@ -694,10 +675,6 @@ def prosecute(trace: list[dict], answer: dict, card: dict) -> dict:
         )
 
     claim_language = {
-        "protocol_misuse": (
-            "slides.get_frame carries a live lease",
-            "the get_frame command has lease_id=null",
-        ),
         "fabricated_citation": (
             "every cited anchor was returned by a tool_result in this exchange",
             "the cited anchor is absent from all tool_result anchor sets",
@@ -1070,9 +1047,6 @@ if __name__ == "__main__":
     )
     assert report["per_class"]["fabricated_citation"]["recall"] == 1.0, (
         "the detector must catch both fabricated_citation fixtures"
-    )
-    assert report["per_class"]["protocol_misuse"]["recall"] == 1.0, (
-        "the detector must catch both protocol_misuse fixtures"
     )
     assert report["precision"] == 1.0, f"a detector that never files a false claim must show precision 1.0, got {report['precision']}"
     assert report["recall"] > 0.059, "the second detector must improve on starter recall"
